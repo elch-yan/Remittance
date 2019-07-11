@@ -1,0 +1,27 @@
+{
+  "name": "remittance",
+  "version": "1.0.0",
+  "description": "Simple project to keep ether securing it with 2-factor authentication.",
+  "author": "Aram Elchyan",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elch-yan/Remittance.git"
+  },
+  "dependencies": {
+    "chai-shallow-deep-equal": "^1.4.6",
+    "jquery": "3.4.1",
+    "openzeppelin-solidity": "2.2.0",
+    "truffle-contract": "4.0.23",
+    "web3": "^1.0.0-beta.37"
+  },
+  "devDependencies": {
+    "chai": "4.2.0",
+    "chai-as-promised": "7.1.1",
+    "file-loader": "^4.0.0",
+    "truffle": "5.0.26",
+    "webpack": "^4.35.3",
+    "webpack-cli": "^3.3.5"
+  },
+  "license": "MIT"
+}
