@@ -3,7 +3,7 @@ pragma solidity 0.5.5;
 contract Owned {
     address private owner;
 
-    event LogChangeOwner(address indexed _originalOwner, address indexed _newOwner);
+    event LogChangeOwner(address indexed originalOwner, address indexed newOwner);
 
     modifier onlyOwner {
         require(owner == msg.sender, "Only owner cann call given function!");

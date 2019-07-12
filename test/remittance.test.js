@@ -8,39 +8,31 @@ contract('Remittance', accounts => {
     // Setup accounts
     const [ owner, depositor, beneficiary ] = accounts;
 
+    const deadline = 1000;
     const fund = 5000;
     const tax = 100;
     const secret = web3.utils.fromAscii('secret');
     let puzzle;
     let remittanceInstance;
-    let deadLineTestingPuzzle;
-    
-    before(async () => {
-        remittanceInstance = await Remittance.deployed();
 
-        puzzle = await remittanceInstance.generatePuzzle(secret, beneficiary, { from: depositor });
-        deadLineTestingPuzzle = await remittanceInstance.generatePuzzle(web3.utils.fromAscii('deadLineSecret'), beneficiary, { from: depositor });
-
-        // Preparing deposit to test deadline
-        await remittanceInstance.createDeposit(deadLineTestingPuzzle, 1, { from: depositor, value: fund });
+    beforeEach(async () => {
+        remittanceInstance = await Remittance.new(100000, 100, { from: owner });
+        puzzle = await remittanceInstance.generatePuzzle(secret, beneficiary);
     });
 
     describe('Overall functionality', () => {
         it('Should generate same puzzle with same arguments', async () => {
             const secret = web3.utils.fromAscii('SecretKey');
-            const puzzle1 = await remittanceInstance.generatePuzzle(secret, beneficiary, { from: depositor });
-            const puzzle2 = await remittanceInstance.generatePuzzle(secret, beneficiary, { from: depositor });
+            const puzzle1 = await remittanceInstance.generatePuzzle(secret, beneficiary);
+            const puzzle2 = await remittanceInstance.generatePuzzle(secret, beneficiary);
 
             assert(puzzle1 && puzzle1 === puzzle2, 'Puzzle generation failed');
         });
 
         it('Should be able to create deposit', async () => {
-            const deadline = 1000;
-
-            // Creating deposit
-            const txObject = await remittanceInstance.createDeposit(puzzle, deadline, { from: depositor, value: fund });
+            const txObject = await createDeposit();
             assert(txObject.receipt.status, `Deposit creation for an account: ${beneficiary} failed`);
-            
+
             // Checking if logs have been written
             expect(txObject.logs.map(({ event }) => event), 'Problem with logs').to.deep.equal([
                 'LogTaxed',
@@ -53,16 +45,18 @@ contract('Remittance', accounts => {
             expect(deposit).to.deep.equal([ fund - tax, depositor ]);
 
             // Checking reward has been saved
-            const reward = await remittanceInstance.getReward.call();
-            expect(reward.toNumber(), 'Reward is incorrect').to.be.equal(2 * tax);
+            const reward = await remittanceInstance.getReward();
+            expect(reward.toNumber(), 'Reward is incorrect').to.be.equal(tax);
         });
 
         it('Should be able to withdraw deposited fund', async () => {
+            await createDeposit();
+
             // Get account initial balance
             const initialBalance = web3.utils.toBN(await web3.eth.getBalance(beneficiary));
 
             // Withdrawing
-            const txObject = await remittanceInstance.withdraw(secret, depositor, { from: beneficiary });
+            const txObject = await remittanceInstance.withdraw(secret, { from: beneficiary });
             assert(txObject.receipt.status, `Deposit withdrawal for an account: ${beneficiary} failed`);
 
             // Get transaction cost
@@ -83,17 +77,24 @@ contract('Remittance', accounts => {
         });
 
         it('Should not be able to get the refund after deadline, if not depositor', async () => {
+            await createDeposit();
+
             // Making sure deadline have passed
-            await new Promise(res => setTimeout(res, 1000));
+            await travelToFuture(2000);
             
-            await remittanceInstance.refund.call(deadLineTestingPuzzle, { from: owner }).should.be.rejectedWith(Error);
+            await remittanceInstance.refund.call(puzzle, { from: owner }).should.be.rejectedWith(Error);
         });
 
         it('Should be able to get the refund, after deadline', async () => {
+            await createDeposit();
+            
+            // Making sure deadline have passed
+            await travelToFuture(2000);
+
             // Get account initial balance
             const initialBalance = web3.utils.toBN(await web3.eth.getBalance(depositor));
             // Requesting refund
-            const txRefundObject = await remittanceInstance.refund(deadLineTestingPuzzle, { from: depositor });
+            const txRefundObject = await remittanceInstance.refund(puzzle, { from: depositor });
             assert(txRefundObject.receipt.status, `Deposit withdrawal for an account: ${depositor} failed`);
 
             // Get transaction cost
@@ -114,6 +115,8 @@ contract('Remittance', accounts => {
         });
 
         it('Should be able to claim reward', async () => {
+            await createDeposit();
+
             // Get account initial balance
             const initialBalance = web3.utils.toBN(await web3.eth.getBalance(owner));
 
@@ -128,36 +131,38 @@ contract('Remittance', accounts => {
             const finalBalance = web3.utils.toBN(await web3.eth.getBalance(owner));
 
             // Check final balance
-            assert.equal(finalBalance.add(txPrice).sub(initialBalance).toString(), 2 * tax, `Final balance for an account: ${owner} is incorrect`);
+            assert.equal(finalBalance.add(txPrice).sub(initialBalance).toString(), tax, `Final balance for an account: ${owner} is incorrect`);
 
             // Checking if logs have been written
             expect(txObject.logs.map(({ event }) => event)[0], `LogRewardClaimed haven't been written`).to.deep.equal('LogRewardClaimed');
 
             // Checking if reward's been updated 
-            let reward = await remittanceInstance.getReward.call();
+            let reward = await remittanceInstance.getReward();
             expect(reward.toNumber()).to.be.equal(0);
         });
 
         it('Should not be able to create deposit with same puzzle twice', async () => {
-            const deadline = 10000;
+            await createDeposit();
 
-            // Creating deposit
-            const txObject = await remittanceInstance.createDeposit(puzzle, deadline, { from: depositor, value: fund });
-            assert(txObject.receipt.status, `Deposit creation for an account: ${beneficiary} failed`);
-            
             // Checking if we can create deposit with same puzzle for the second time
             await remittanceInstance.createDeposit.call(puzzle, deadline, { from: depositor, value: fund }).should.be.rejectedWith(Error);
         });
 
         it('Should not be able to withdraw deposited fund with wrong secret', async () => {
+            await createDeposit();
+
             await remittanceInstance.withdraw.call(web3.utils.fromAscii('wrongSecret'), { from: beneficiary }).should.be.rejectedWith(Error);
         });
 
         it('Should not be able to get the refund, before deadline is over', async () => {
+            await createDeposit();
+
             await remittanceInstance.refund.call(secret, { from: depositor }).should.be.rejectedWith(Error);
         });
 
         it('Should not be able to claim reward if not an owner', async () => {
+            await createDeposit();
+
             await remittanceInstance.claimReward.call({ from: depositor }).should.be.rejectedWith(Error);
         });
 
@@ -172,13 +177,21 @@ contract('Remittance', accounts => {
             expect(txObject.logs.map(({ event }) => event)[0], `LogTaxChanged haven't been written`).to.deep.equal('LogTaxChanged');
 
             // Checking if tax has been changed
-            const tax = await remittanceInstance.tax.call();
+            const tax = await remittanceInstance.getTax();
             expect(tax.toNumber(), 'Wrong tax').to.be.equal(newTax);
         });
 
         it('Should not be able to change tax if not an owner', async () => {
             await remittanceInstance.changeTax(500, { from: beneficiary }).should.be.rejectedWith(Error);
         });
+
+
+        /**
+         * Creates default deposit for testing
+         */
+        function createDeposit() {
+            return remittanceInstance.createDeposit(puzzle, deadline, { from: depositor, value: fund });
+        }
     });
 });
 
@@ -198,4 +211,21 @@ async function getTransactionPrice(txObject) {
     
     // Calculate overall price
     return gasPrice.mul(gasUsed);
+}
+
+/**
+ * Increases EVM block time by given amount of milliseconds
+ *
+ * @param {Number} time milliseconds
+ * @returns {Promise}
+ */
+async function travelToFuture(time) {
+    return new Promise((resolve, reject) => {
+        web3.currentProvider.send({
+                jsonrpc: "2.0",
+                method: "evm_increaseTime",
+                params: [ time ],
+                id: new Date().getTime()
+            }, (err, res) => err && reject(error) || resolve(res.result));
+    });
 }

@@ -12,6 +12,7 @@ contract Remittance is Taxed {
     }
 
     mapping (bytes32 => Deposit) public deposits;
+    mapping (bytes32 => bool) public usedPuzzles;
 
     event LogDepositCreated(address indexed depositor, bytes32 puzzle, uint256 fund, uint256 tax, uint256 deadline);
     event LogDepositWithdrawn(address indexed withdrawer, bytes32 puzzle, uint256 fund);
@@ -23,36 +24,34 @@ contract Remittance is Taxed {
 
     // External calls to pure and view functions not logged to blockchain, which means that beneficiary won't be able to hunt down the secret in the phase of creation
     function generatePuzzle(bytes32 secret, address beneficiary) public view returns(bytes32) {
-        return _generatePuzzle(secret, beneficiary, msg.sender);
-    }
-
-    function _generatePuzzle(bytes32 secret, address beneficiary, address depositor) private pure returns(bytes32) {
         require(beneficiary != address(0), "Beneficary address cannot be empty!");
 
-        return keccak256(abi.encodePacked(secret, beneficiary, depositor));
+        return keccak256(abi.encodePacked(secret, beneficiary, address(this)));
     }
 
     function createDeposit(bytes32 puzzle, uint256 deadline) public payable whenNotPaused returns(bool) {
-        uint256 fund = msg.value.sub(tax);
+        uint256 fund = msg.value.sub(getTax());
         require(fund > 0, "Funds to deposit should be more than tax!");
-        require(deposits[puzzle].fund == 0, "Puzzle already used!");
+        require(!usedPuzzles[puzzle], "Puzzle already used!");
         require(deadline <= maxDeadline, "Deadline is too much long in the future!");
 
+        deadline = block.timestamp.add(deadline);
         deposits[puzzle] = Deposit({
             fund: fund,
             depositor: msg.sender,
-            deadline: block.timestamp.add(deadline)
+            deadline: deadline
         });
-        this.payTax.value(tax)();
+        usedPuzzles[puzzle] = true;
+        payTax();
 
-        emit LogDepositCreated(msg.sender, puzzle, fund, tax, deposits[puzzle].deadline);
+        emit LogDepositCreated(msg.sender, puzzle, fund, getTax(), deadline);
 
         return true;
     }
 
     // Beneficiary can claim deposit through this function
-    function withdraw(bytes32 secret, address depositor) external whenNotPaused returns(bool) {
-        bytes32 puzzle = _generatePuzzle(secret, msg.sender, depositor);
+    function withdraw(bytes32 secret) external whenNotPaused returns(bool) {
+        bytes32 puzzle = generatePuzzle(secret, msg.sender);
         uint256 fund = deposits[puzzle].fund;
         require(fund > 0, "No funds for generated puzzle!");
 
