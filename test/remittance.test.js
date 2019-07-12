@@ -10,26 +10,26 @@ contract('Remittance', accounts => {
 
     const fund = 5000;
     const tax = 100;
+    const secret = web3.utils.fromAscii('secret');
     let puzzle;
     let remittanceInstance;
     let deadLineTestingPuzzle;
     
     before(async () => {
         remittanceInstance = await Remittance.deployed();
-        puzzle = await remittanceInstance.generatePuzzle('secret', beneficiary);
 
-        deadLineTestingPuzzle = await remittanceInstance.generatePuzzle('deadLineSecret', beneficiary);
+        puzzle = await remittanceInstance.generatePuzzle(secret, beneficiary, { from: depositor });
+        deadLineTestingPuzzle = await remittanceInstance.generatePuzzle(web3.utils.fromAscii('deadLineSecret'), beneficiary, { from: depositor });
 
         // Preparing deposit to test deadline
-        const txObject = await remittanceInstance.createDeposit(deadLineTestingPuzzle, 0, { from: depositor, value: fund });
-        assert(txObject.receipt.status, `Deposit creation for an account: ${beneficiary} failed`);
+        await remittanceInstance.createDeposit(deadLineTestingPuzzle, 1, { from: depositor, value: fund });
     });
 
     describe('Overall functionality', () => {
         it('Should generate same puzzle with same arguments', async () => {
-            const secret = 'SecretKey';
-            const puzzle1 = await remittanceInstance.generatePuzzle(secret, beneficiary);
-            const puzzle2 = await remittanceInstance.generatePuzzle(secret, beneficiary);
+            const secret = web3.utils.fromAscii('SecretKey');
+            const puzzle1 = await remittanceInstance.generatePuzzle(secret, beneficiary, { from: depositor });
+            const puzzle2 = await remittanceInstance.generatePuzzle(secret, beneficiary, { from: depositor });
 
             assert(puzzle1 && puzzle1 === puzzle2, 'Puzzle generation failed');
         });
@@ -53,7 +53,7 @@ contract('Remittance', accounts => {
             expect(deposit).to.deep.equal([ fund - tax, depositor ]);
 
             // Checking reward has been saved
-            const reward = await remittanceInstance.reward.call();
+            const reward = await remittanceInstance.getReward.call();
             expect(reward.toNumber(), 'Reward is incorrect').to.be.equal(2 * tax);
         });
 
@@ -62,7 +62,7 @@ contract('Remittance', accounts => {
             const initialBalance = web3.utils.toBN(await web3.eth.getBalance(beneficiary));
 
             // Withdrawing
-            const txObject = await remittanceInstance.withdraw('secret', { from: beneficiary });
+            const txObject = await remittanceInstance.withdraw(secret, depositor, { from: beneficiary });
             assert(txObject.receipt.status, `Deposit withdrawal for an account: ${beneficiary} failed`);
 
             // Get transaction cost
@@ -83,13 +83,15 @@ contract('Remittance', accounts => {
         });
 
         it('Should not be able to get the refund after deadline, if not depositor', async () => {
+            // Making sure deadline have passed
+            await new Promise(res => setTimeout(res, 1000));
+            
             await remittanceInstance.refund.call(deadLineTestingPuzzle, { from: owner }).should.be.rejectedWith(Error);
         });
 
         it('Should be able to get the refund, after deadline', async () => {
             // Get account initial balance
             const initialBalance = web3.utils.toBN(await web3.eth.getBalance(depositor));
-
             // Requesting refund
             const txRefundObject = await remittanceInstance.refund(deadLineTestingPuzzle, { from: depositor });
             assert(txRefundObject.receipt.status, `Deposit withdrawal for an account: ${depositor} failed`);
@@ -132,7 +134,7 @@ contract('Remittance', accounts => {
             expect(txObject.logs.map(({ event }) => event)[0], `LogRewardClaimed haven't been written`).to.deep.equal('LogRewardClaimed');
 
             // Checking if reward's been updated 
-            let reward = await remittanceInstance.reward.call();
+            let reward = await remittanceInstance.getReward.call();
             expect(reward.toNumber()).to.be.equal(0);
         });
 
@@ -148,11 +150,11 @@ contract('Remittance', accounts => {
         });
 
         it('Should not be able to withdraw deposited fund with wrong secret', async () => {
-            await remittanceInstance.withdraw.call('wrongSecret', { from: beneficiary }).should.be.rejectedWith(Error);
+            await remittanceInstance.withdraw.call(web3.utils.fromAscii('wrongSecret'), { from: beneficiary }).should.be.rejectedWith(Error);
         });
 
         it('Should not be able to get the refund, before deadline is over', async () => {
-            await remittanceInstance.refund.call('secret', { from: depositor }).should.be.rejectedWith(Error);
+            await remittanceInstance.refund.call(secret, { from: depositor }).should.be.rejectedWith(Error);
         });
 
         it('Should not be able to claim reward if not an owner', async () => {

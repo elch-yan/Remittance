@@ -7,24 +7,31 @@ contract Taxed is Stoppable {
     using SafeMath for uint256;
 
     uint256 public tax;
-    uint256 public reward;
+    uint256 private reward;
 
     event LogTaxChanged(address indexed owner, uint256 oldtax, uint256 newtax);
     event LogTaxed(address indexed taxPayer, uint256 tax);
     event LogRewardClaimed(address indexed owner, uint256 reward);
 
     constructor(uint256 _tax) public {
+        require(_tax >= 0, "Tax can not be negative!");
         tax = _tax;
     }
 
-    function changeTax(uint256 _tax) public onlyOwner returns(bool) {
-        emit LogTaxChanged(msg.sender, tax, _tax);
-        tax = _tax;
+    function getReward() public view returns(uint256) {
+        return reward;
+    }
+
+    function changeTax(uint256 newTax) public onlyOwner returns(bool) {
+        require(newTax >= 0, "Tax can not be negative!");
+        emit LogTaxChanged(msg.sender, tax, newTax);
+        tax = newTax;
 
         return true;
     }
 
-    function payTax() public whenNotPaused returns(bool) {
+    function payTax() public payable whenNotPaused returns(bool) {
+        require(msg.value == tax, "Value must be equal to tax!");
         emit LogTaxed(msg.sender, tax);
         reward = reward.add(tax);
 
