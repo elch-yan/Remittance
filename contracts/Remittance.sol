@@ -30,7 +30,8 @@ contract Remittance is Taxed {
     }
 
     function createDeposit(bytes32 puzzle, uint256 deadline) public payable whenNotPaused returns(bool) {
-        uint256 fund = msg.value.sub(getTax());
+        uint256 tax = getTax();
+        uint256 fund = msg.value.sub(tax);
         require(fund > 0, "Funds to deposit should be more than tax!");
         require(!usedPuzzles[puzzle], "Puzzle already used!");
         require(deadline <= maxDeadline, "Deadline is too much long in the future!");
@@ -44,7 +45,7 @@ contract Remittance is Taxed {
         usedPuzzles[puzzle] = true;
         payTax();
 
-        emit LogDepositCreated(msg.sender, puzzle, fund, getTax(), deadline);
+        emit LogDepositCreated(msg.sender, puzzle, fund, tax, deadline);
 
         return true;
     }

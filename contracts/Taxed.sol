@@ -21,8 +21,8 @@ contract Taxed is Stoppable {
         return tax;
     }
 
-    function getReward() public view returns(uint256) {
-        return ownerReward[msg.sender];
+    function getReward(address _owner) public view returns(uint256) {
+        return ownerReward[_owner];
     }
 
     function changeTax(uint256 newTax) public onlyOwner returns(bool) {
@@ -45,9 +45,10 @@ contract Taxed is Stoppable {
         uint256 reward = ownerReward[msg.sender];
         require(reward > 0, "No reward to claim!");
 
+        delete ownerReward[msg.sender];
+
         emit LogRewardClaimed(msg.sender, reward);
         msg.sender.transfer(reward);
-        delete ownerReward[msg.sender];
 
         return true;
     }

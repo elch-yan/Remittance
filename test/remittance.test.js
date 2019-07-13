@@ -45,7 +45,7 @@ contract('Remittance', accounts => {
             expect(deposit).to.deep.equal([ fund - tax, depositor ]);
 
             // Checking reward has been saved
-            const reward = await remittanceInstance.getReward();
+            const reward = await remittanceInstance.getReward(owner);
             expect(reward.toNumber(), 'Reward is incorrect').to.be.equal(tax);
         });
 
@@ -137,7 +137,7 @@ contract('Remittance', accounts => {
             expect(txObject.logs.map(({ event }) => event)[0], `LogRewardClaimed haven't been written`).to.deep.equal('LogRewardClaimed');
 
             // Checking if reward's been updated 
-            let reward = await remittanceInstance.getReward();
+            let reward = await remittanceInstance.getReward(owner);
             expect(reward.toNumber()).to.be.equal(0);
         });
 
@@ -145,7 +145,7 @@ contract('Remittance', accounts => {
             await createDeposit();
 
             // Checking if we can create deposit with same puzzle for the second time
-            await remittanceInstance.createDeposit.call(puzzle, deadline, { from: depositor, value: fund }).should.be.rejectedWith(Error);
+            await createDeposit().should.be.rejectedWith(Error);
         });
 
         it('Should not be able to withdraw deposited fund with wrong secret', async () => {
@@ -189,8 +189,8 @@ contract('Remittance', accounts => {
         /**
          * Creates default deposit for testing
          */
-        function createDeposit() {
-            return remittanceInstance.createDeposit(puzzle, deadline, { from: depositor, value: fund });
+        function createDeposit({p = puzzle, d = deadline, from = depositor, value = fund } = {}) {
+            return remittanceInstance.createDeposit(p, d, { from, value });
         }
     });
 });
