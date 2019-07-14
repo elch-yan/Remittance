@@ -12,7 +12,6 @@ contract Remittance is Taxed {
     }
 
     mapping (bytes32 => Deposit) public deposits;
-    mapping (bytes32 => bool) public usedPuzzles;
 
     event LogDepositCreated(address indexed depositor, bytes32 puzzle, uint256 fund, uint256 tax, uint256 deadline);
     event LogDepositWithdrawn(address indexed withdrawer, bytes32 puzzle, uint256 fund);
@@ -33,8 +32,8 @@ contract Remittance is Taxed {
         uint256 tax = getTax();
         uint256 fund = msg.value.sub(tax);
         require(fund > 0, "Funds to deposit should be more than tax!");
-        require(!usedPuzzles[puzzle], "Puzzle already used!");
-        require(deadline <= maxDeadline, "Deadline is too much long in the future!");
+        require(deposits[puzzle].depositor == address(0), "Puzzle already used!");
+        require(deadline <= maxDeadline, "Deadline is too far into the future!");
 
         deadline = block.timestamp.add(deadline);
         deposits[puzzle] = Deposit({
@@ -42,7 +41,6 @@ contract Remittance is Taxed {
             depositor: msg.sender,
             deadline: deadline
         });
-        usedPuzzles[puzzle] = true;
         payTax();
 
         emit LogDepositCreated(msg.sender, puzzle, fund, tax, deadline);
@@ -71,7 +69,8 @@ contract Remittance is Taxed {
         require(deposits[puzzle].depositor == msg.sender, "Only depositor can get refunded!");
         require(deposits[puzzle].deadline < block.timestamp, "Depositor can get the refund only after deadline!");
 
-        delete deposits[puzzle];
+        delete deposits[puzzle].fund;
+        delete deposits[puzzle].deadline;
 
         emit LogDepositRefunded(msg.sender, puzzle, fund);
         msg.sender.transfer(fund);

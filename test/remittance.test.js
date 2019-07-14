@@ -21,6 +21,17 @@ contract('Remittance', accounts => {
     });
 
     describe('Overall functionality', () => {
+        
+        /**
+         * Creates in case if not specified default deposit for testing
+         *
+         * @param [{p = puzzle, d = deadline, from = depositor, value = fund }={}]
+         * @returns {Promise.<txObject>}
+         */
+        function createDeposit({p = puzzle, d = deadline, from = depositor, value = fund } = {}) {
+            return remittanceInstance.createDeposit(p, d, { from, value });
+        }
+
         it('Should generate same puzzle with same arguments', async () => {
             const secret = web3.utils.fromAscii('SecretKey');
             const puzzle1 = await remittanceInstance.generatePuzzle(secret, beneficiary);
@@ -184,14 +195,6 @@ contract('Remittance', accounts => {
         it('Should not be able to change tax if not an owner', async () => {
             await remittanceInstance.changeTax(500, { from: beneficiary }).should.be.rejectedWith(Error);
         });
-
-
-        /**
-         * Creates default deposit for testing
-         */
-        function createDeposit({p = puzzle, d = deadline, from = depositor, value = fund } = {}) {
-            return remittanceInstance.createDeposit(p, d, { from, value });
-        }
     });
 });
 
